@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>DCN Secure Comm</title>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; -webkit-tap-highlight-color: transparent; }
+        
+        body {
+            /* Deep, dark green to black animated gradient */
+            background: linear-gradient(-45deg, #051105, #0a220a, #000000, #031503);
+            background-size: 400% 400%; animation: gradientBG 15s ease infinite;
+            height: 100vh; height: 100dvh; 
+            display: flex; justify-content: center; align-items: center; color: #ffffff; overflow: hidden;
+        }
+
+        @keyframes gradientBG { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+
+        .chat-container {
+            width: 95%; max-width: 800px; height: 90vh;
+            background: rgba(0, 15, 0, 0.5); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+            /* Neon green subtle border */
+            border: 1px solid rgba(50, 255, 100, 0.15); border-radius: 20px;
+            display: flex; flex-direction: column; box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.8); overflow: hidden;
+        }
+
+        .chat-header {
+            padding: 20px; background: rgba(0, 0, 0, 0.6); border-bottom: 1px solid rgba(50, 255, 100, 0.15);
+            text-align: center; font-size: 1.4rem; font-weight: 700; letter-spacing: 2px; text-transform: uppercase;
+            /* Cyberpunk cyan to neon green text */
+            background: -webkit-linear-gradient(45deg, #00ff88, #00b300); -webkit-background-clip: text; -webkit-text-fill-color: transparent; flex-shrink: 0;
+        }
+
+        .hud {
+            background: rgba(0, 0, 0, 0.85); border-bottom: 1px solid rgba(50, 255, 100, 0.2);
+            padding: 8px 15px; font-size: 0.75rem; font-family: 'Courier New', Courier, monospace;
+            color: #b3ffb3; display: flex; justify-content: center; align-items: center; gap: 10px; flex-shrink: 0;
+        }
+        .status-dot {
+            height: 8px; width: 8px; background-color: #ff3333; border-radius: 50%; display: inline-block; box-shadow: 0 0 8px #ff3333; transition: 0.3s;
+        }
+        .status-dot.connected { background-color: #00ff00; box-shadow: 0 0 8px #00ff00; }
+        .hud-divider { color: rgba(50, 255, 100, 0.3); }
+
+        #messages { flex-grow: 1; padding: 25px; overflow-y: auto; display: flex; flex-direction: column; list-style-type: none; scroll-behavior: smooth; }
+        #messages::-webkit-scrollbar { width: 6px; }
+        #messages::-webkit-scrollbar-track { background: transparent; }
+        #messages::-webkit-scrollbar-thumb { background: rgba(50, 255, 100, 0.3); border-radius: 10px; }
+
+        .msg-bubble {
+            padding: 12px 18px; border-radius: 20px; margin-bottom: 15px; max-width: 75%;
+            word-wrap: break-word; font-size: 1rem; line-height: 1.4;
+            animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+            opacity: 0; transform: scale(0.8) translateY(10px); box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+        }
+
+        .msg-meta {
+            display: block; font-size: 0.65rem; margin-top: 6px; opacity: 0.7;
+            font-family: 'Courier New', Courier, monospace; border-top: 1px solid rgba(255, 255, 255, 0.15); padding-top: 4px;
+        }
+
+        @keyframes popIn { to { opacity: 1; transform: scale(1) translateY(0); } }
+
+        /* Sent Bubble: Vibrant toxic green */
+        .sent { 
+            align-self: flex-end; background: linear-gradient(135deg, #00cc44 0%, #00802b 100%); 
+            color: white; border-bottom-right-radius: 4px; box-shadow: 0 4px 15px rgba(0, 255, 85, 0.2); 
+        }
+        /* Received Bubble: Frosted dark green glass */
+        .received { 
+            align-self: flex-start; background: rgba(20, 255, 85, 0.08); border: 1px solid rgba(20, 255, 85, 0.3); 
+            color: #e6ffe6; border-bottom-left-radius: 4px; backdrop-filter: blur(5px); box-shadow: 0 4px 15px rgba(20, 255, 85, 0.1); 
+        }
+
+        .input-area { display: flex; padding: 20px; background: rgba(0, 0, 0, 0.7); border-top: 1px solid rgba(50, 255, 100, 0.15); gap: 12px; flex-shrink: 0; }
+        #myMessage { 
+            flex-grow: 1; padding: 15px 20px; border-radius: 30px; border: 1px solid rgba(50, 255, 100, 0.2); 
+            background: rgba(0, 10, 0, 0.6); color: white; font-size: 1rem; outline: none; transition: all 0.3s ease; 
+        }
+        #myMessage:focus { border-color: #00ff55; box-shadow: 0 0 15px rgba(0, 255, 85, 0.2); background: rgba(0, 20, 0, 0.8); }
+        #myMessage::placeholder { color: rgba(100, 255, 150, 0.4); }
+        
+        #sendBtn { 
+            padding: 0 25px; border-radius: 30px; background: linear-gradient(45deg, #00e64d, #009933); 
+            color: white; font-weight: 700; border: none; cursor: pointer; transition: transform 0.2s ease, box-shadow 0.2s ease; 
+            font-size: 0.95rem; text-transform: uppercase; letter-spacing: 1px; 
+        }
+        #sendBtn:hover { box-shadow: 0 5px 20px rgba(0, 255, 85, 0.3); transform: translateY(-2px); }
+        #sendBtn:active { transform: translateY(1px); }
+
+        @media (max-width: 600px) {
+            body { align-items: flex-start; }
+            .chat-container { width: 100%; height: 100dvh; border-radius: 0; border: none; box-shadow: none; }
+            .chat-header { padding: 15px; font-size: 1.1rem; }
+            #messages { padding: 15px 10px; }
+            .msg-bubble { max-width: 88%; padding: 10px 15px; font-size: 0.95rem; }
+            .input-area { padding: 12px 10px; padding-bottom: max(12px, env(safe-area-inset-bottom)); background: rgba(0, 0, 0, 0.9); gap: 8px; }
+            #myMessage { padding: 12px 15px; }
+            #sendBtn { padding: 0 18px; font-size: 0.85rem; }
+            .hud { font-size: 0.65rem; padding: 6px 10px; } 
+        }
+    </style>
+</head>
+<body>
+
+    <div class="chat-container">
+        <div class="chat-header">Network Core Chat</div>
+        
+        <!-- LIVE DIAGNOSTICS HUD -->
+        <div class="hud">
+            <div><span class="status-dot"></span> <span id="conn-status" style="color:#ff3333;">DISCONNECTED</span></div>
+            <span class="hud-divider">|</span>
+            <div>PROT: WSS/TCP</div>
+            <span class="hud-divider">|</span>
+            <div>NODE: <span id="node-id" style="color:#ffffff;">AWAITING...</span></div>
+        </div>
+        
+        <ul id="messages"></ul>
+        
+        <div class="input-area">
+            <input type="text" id="myMessage" placeholder="Transmit packet..." autocomplete="off">
+            <button id="sendBtn">Send</button>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+
+        socket.on('connect', () => {
+            document.getElementById('conn-status').innerText = 'CONNECTED';
+            document.getElementById('conn-status').style.color = '#00ff00';
+            document.querySelector('.status-dot').classList.add('connected');
+            document.getElementById('node-id').innerText = socket.id.substring(0, 6).toUpperCase();
+        });
+
+        socket.on('disconnect', () => {
+            document.getElementById('conn-status').innerText = 'DISCONNECTED';
+            document.getElementById('conn-status').style.color = '#ff3333';
+            document.querySelector('.status-dot').classList.remove('connected');
+            document.getElementById('node-id').innerText = 'OFFLINE';
+        });
+
+        socket.on('message', function(packet) {
+            const li = document.createElement('li');
+            li.classList.add('msg-bubble');
+            
+            li.innerHTML = `
+                <div class="msg-text">${packet.text}</div>
+                <div class="msg-meta">TX_ID: ${packet.sender.substring(0,6).toUpperCase()} | Size: ${packet.size} B | Time: ${packet.time}</div>
+            `;
+            
+            if (packet.sender === socket.id) {
+                li.classList.add('sent'); 
+            } else {
+                li.classList.add('received'); 
+            }
+            
+            document.getElementById('messages').appendChild(li);
+            
+            const messagesUl = document.getElementById('messages');
+            messagesUl.scrollTop = messagesUl.scrollHeight;
+        });
+
+        document.getElementById('sendBtn').onclick = function() {
+            const input = document.getElementById('myMessage');
+            if (input.value.trim() !== "") {
+                socket.send(input.value);
+                input.value = ''; 
+                input.focus(); 
+            }
+        };
+
+        document.getElementById('myMessage').addEventListener("keypress", function(event) {
+            if (event.key === "Enter") {
+                event.preventDefault(); 
+                document.getElementById('sendBtn').click();
+            }
+        });
+    </script>
+</body>
+</html>
