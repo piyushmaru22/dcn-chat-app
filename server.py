@@ -35,4 +35,4 @@ def handle_message(msg):
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     print(f"[SYSTEM] DCN WebSocket Server Initialized on Port {port}")
-    socketio.run(app, host='0.0.0.0', port=port, allow\_unsafe\_werkzeug=True)
+    socketio.run(app, host='0.0.0.0', port=port, allow_unsafe_werkzeug=True)
